@@ -1,79 +1,75 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Search,
-  SlidersHorizontal,
-  UserPlus,
-  X,
-  LogIn,
-  KeyRound,
-} from "lucide-react"
+import { useEffect, useState } from "react"
+import { Search, UserPlus, X, LogIn, KeyRound, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { AppHeader } from "@/components/layout/app-header"
+import { useAuth } from "@/hooks/useAuth"
+import { RoleGate } from "@/components/auth/RoleGate"
+import { usersApi } from "@/lib/api/users"
+import type { UserResponse } from "@/lib/api/types"
 
-const users = [
-  {
-    id: 1,
-    name: "Carlos Mendoza",
-    email: "carlos@emitix.com.co",
-    avatar: "/avatars/carlos.jpg",
-    role: "Administrador",
-    roleColor: "bg-ocean/10 text-ocean border-ocean/30",
-    status: "activo",
-    lastAccess: "Hoy, 09:41 AM",
-  },
-  {
-    id: 2,
-    name: "Laura Martínez",
-    email: "contabilidad@empresa.com",
-    initials: "LM",
-    role: "Contador",
-    roleColor: "bg-emerald/10 text-emerald border-emerald/30",
-    status: "activo",
-    lastAccess: "Ayer, 16:20 PM",
-  },
-  {
-    id: 3,
-    name: "Ana Silva",
-    email: "facturacion@empresa.com",
-    avatar: "/avatars/ana.jpg",
-    role: "Operador",
-    roleColor: "bg-slate/10 text-slate border-slate/30",
-    status: "activo",
-    lastAccess: "12 Oct 2023",
-  },
-  {
-    id: 4,
-    name: "David Peña",
-    email: "david.p@empresa.com",
-    initials: "DP",
-    role: "Solo Lectura",
-    roleColor: "bg-slate/10 text-slate border-slate/30",
-    status: "inactivo",
-    lastAccess: "05 Sep 2023",
-  },
-]
+const roleLabel: Record<string, string> = {
+  SUPER_ADMIN: "Super Admin",
+  ADMIN:       "Administrador",
+  ACCOUNTANT:  "Contador",
+  VIEWER:      "Solo Lectura",
+}
 
-const selectedUser = {
-  id: 2,
-  name: "Laura Martínez",
-  email: "contabilidad@empresa.com",
-  initials: "LM",
-  role: "Contador",
-  status: "activo",
-  lastAccess: "Ayer, 16:20 PM",
-  loginMethod: "Email / Password",
-  permissions: "Puede crear y enviar facturas, consultar reportes financieros y descargar XMLs firmados.",
+const roleColor: Record<string, string> = {
+  SUPER_ADMIN: "bg-coral/10 text-coral border-coral/30",
+  ADMIN:       "bg-ocean/10 text-ocean border-ocean/30",
+  ACCOUNTANT:  "bg-emerald/10 text-emerald border-emerald/30",
+  VIEWER:      "bg-slate/10 text-slate border-slate/30",
+}
+
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()
 }
 
 export default function UsersPage() {
-  const [search, setSearch] = useState("")
-  const [showDetail, setShowDetail] = useState(true)
+  const { companyId } = useAuth()
+
+  const [users, setUsers]           = useState<UserResponse[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState<string | null>(null)
+  const [search, setSearch]         = useState("")
+  const [selected, setSelected]     = useState<UserResponse | null>(null)
+  const [saving, setSaving]         = useState(false)
+
+  const fetchUsers = () => {
+    setLoading(true)
+    usersApi.getAll({ companyId: companyId ?? undefined, size: 50 })
+      .then(p => setUsers(p.content))
+      .catch(() => setError("Error al cargar usuarios."))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchUsers() }, [companyId])
+
+  const filtered = users.filter(u =>
+    u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleToggleActive = async () => {
+    if (!selected) return
+    setSaving(true)
+    try {
+      const updated = await usersApi.update(selected.id, { isActive: !selected.isActive })
+      setSelected(updated)
+      setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
+    } catch {
+      setError("No se pudo actualizar el usuario.")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,25 +77,21 @@ export default function UsersPage() {
 
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className={showDetail ? "lg:col-span-2" : "lg:col-span-3"}>
-            {/* Header */}
+          {/* Main */}
+          <div className={selected ? "lg:col-span-2" : "lg:col-span-3"}>
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h1 className="font-display text-3xl font-bold text-ink">
-                  Gestión de usuarios
-                </h1>
-                <p className="text-slate mt-1">
-                  Manage access levels and system permissions for your team.
-                </p>
+                <h1 className="font-display text-3xl font-bold text-ink">Gestión de usuarios</h1>
+                <p className="text-slate mt-1">Administra los niveles de acceso y permisos del sistema.</p>
               </div>
-              <Button className="bg-ink hover:bg-ink/90 text-white">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Invitar usuario
-              </Button>
+              <RoleGate required="ADMIN">
+                <Button className="bg-ink hover:bg-ink/90 text-white">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Invitar usuario
+                </Button>
+              </RoleGate>
             </div>
 
-            {/* Search and Filters */}
             <div className="flex gap-3 mb-6">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
@@ -110,183 +102,150 @@ export default function UsersPage() {
                   className="pl-10 bg-white border-mist"
                 />
               </div>
-              <Button variant="outline" className="border-mist">
-                <SlidersHorizontal className="mr-2 h-4 w-4" />
-                Filtros
-              </Button>
             </div>
 
-            {/* Users Table */}
+            {error && (
+              <div className="mb-4 flex items-center gap-2 p-3 rounded-lg bg-coral/10 border border-coral/30 text-coral text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
             <div className="bg-white rounded-lg border border-border overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">
-                      USUARIO
-                    </th>
-                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">
-                      ROL
-                    </th>
-                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">
-                      ESTADO
-                    </th>
-                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">
-                      ÚLTIMO ACCESO
-                    </th>
+                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">USUARIO</th>
+                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">ROL</th>
+                    <th className="text-left py-4 px-4 text-label-caps text-slate font-medium">ESTADO</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
-                    <tr
-                      key={user.id}
-                      onClick={() => setShowDetail(true)}
-                      className={`border-b border-border last:border-0 hover:bg-cloud/50 transition-colors cursor-pointer ${
-                        user.id === selectedUser.id ? "bg-cloud/50" : ""
-                      } ${user.status === "inactivo" ? "opacity-50" : ""}`}
-                    >
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            {user.avatar ? (
-                              <AvatarImage src={user.avatar} alt={user.name} />
-                            ) : null}
-                            <AvatarFallback className="bg-ink text-white text-sm">
-                              {user.initials || user.name.split(" ").map(n => n[0]).join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-ink">{user.name}</p>
-                            <p className="text-sm text-slate">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge variant="outline" className={user.roleColor}>
-                          {user.role}
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge
-                          variant="outline"
-                          className={
-                            user.status === "activo"
-                              ? "bg-emerald/10 text-emerald border-emerald/30"
-                              : "bg-slate/10 text-slate border-slate/30"
-                          }
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-current mr-2" />
-                          {user.status === "activo" ? "Activo" : "Inactivo"}
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-slate">
-                        {user.lastAccess}
+                  {loading ? (
+                    [...Array(4)].map((_, i) => (
+                      <tr key={i} className="border-b border-border">
+                        <td className="py-4 px-4" colSpan={3}><Skeleton className="h-10 w-full" /></td>
+                      </tr>
+                    ))
+                  ) : filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-10 text-center text-slate">
+                        {search ? "Sin resultados para esa búsqueda." : "No hay usuarios registrados."}
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filtered.map((u) => (
+                      <tr
+                        key={u.id}
+                        onClick={() => setSelected(u)}
+                        className={`border-b border-border last:border-0 hover:bg-cloud/50 transition-colors cursor-pointer ${
+                          selected?.id === u.id ? "bg-cloud/50" : ""
+                        } ${!u.isActive ? "opacity-50" : ""}`}
+                      >
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="bg-ink text-white text-sm">
+                                {initials(u.fullName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-ink">{u.fullName}</p>
+                              <p className="text-sm text-slate">{u.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <Badge variant="outline" className={roleColor[u.role] ?? ""}>
+                            {roleLabel[u.role] ?? u.role}
+                          </Badge>
+                        </td>
+                        <td className="py-4 px-4">
+                          <Badge variant="outline" className={u.isActive
+                            ? "bg-emerald/10 text-emerald border-emerald/30"
+                            : "bg-slate/10 text-slate border-slate/30"
+                          }>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current mr-2" />
+                            {u.isActive ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* User Detail Panel */}
-          {showDetail && (
+          {/* Detail Panel */}
+          {selected && (
             <div>
               <Card className="sticky top-24">
                 <CardHeader className="flex flex-row items-center justify-between pb-4">
-                  <CardTitle className="font-display text-lg font-bold text-ink">
-                    Detalles de Usuario
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowDetail(false)}
-                  >
+                  <CardTitle className="font-display text-lg font-bold text-ink">Detalles de Usuario</CardTitle>
+                  <Button variant="ghost" size="icon" onClick={() => setSelected(null)}>
                     <X className="h-4 w-4 text-slate" />
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* User Avatar and Name */}
                   <div className="flex flex-col items-center text-center">
                     <Avatar className="h-20 w-20 mb-4">
                       <AvatarFallback className="bg-ink text-white text-2xl">
-                        {selectedUser.initials}
+                        {initials(selected.fullName)}
                       </AvatarFallback>
                     </Avatar>
-                    <h3 className="font-display text-xl font-bold text-ink">
-                      {selectedUser.name}
-                    </h3>
-                    <p className="text-sm text-slate">{selectedUser.email}</p>
-                    <Badge
-                      variant="outline"
-                      className="mt-3 bg-emerald/10 text-emerald border-emerald/30"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald mr-2" />
-                      Cuenta Activa
+                    <h3 className="font-display text-xl font-bold text-ink">{selected.fullName}</h3>
+                    <p className="text-sm text-slate">{selected.email}</p>
+                    <Badge variant="outline" className={`mt-3 ${selected.isActive
+                      ? "bg-emerald/10 text-emerald border-emerald/30"
+                      : "bg-slate/10 text-slate border-slate/30"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full mr-2 ${selected.isActive ? "bg-emerald" : "bg-slate"}`} />
+                      {selected.isActive ? "Cuenta Activa" : "Cuenta Inactiva"}
                     </Badge>
                   </div>
 
-                  {/* Role & Permissions */}
                   <div className="pt-4 border-t border-border">
-                    <p className="text-label-caps text-slate mb-3">
-                      ROL Y PERMISOS
-                    </p>
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge
-                        variant="outline"
-                        className="bg-emerald/10 text-emerald border-emerald/30"
-                      >
-                        {selectedUser.role}
-                      </Badge>
-                      <Button
-                        variant="link"
-                        className="text-emerald p-0 h-auto font-medium"
-                      >
-                        Cambiar
-                      </Button>
-                    </div>
-                    <p className="text-sm text-slate leading-relaxed">
-                      {selectedUser.permissions}
-                    </p>
+                    <p className="text-label-caps text-slate mb-3">ROL Y PERMISOS</p>
+                    <Badge variant="outline" className={roleColor[selected.role] ?? ""}>
+                      {roleLabel[selected.role] ?? selected.role}
+                    </Badge>
                   </div>
 
-                  {/* Security */}
                   <div className="pt-4 border-t border-border">
                     <p className="text-label-caps text-slate mb-3">SEGURIDAD</p>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
                         <LogIn className="h-4 w-4 text-slate" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-ink">
-                            Último acceso
-                          </p>
+                          <p className="text-sm font-medium text-ink">Creado</p>
                         </div>
                         <span className="text-sm text-slate">
-                          {selectedUser.lastAccess}
+                          {new Date(selected.createdAt).toLocaleDateString("es-CO")}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
                         <KeyRound className="h-4 w-4 text-slate" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-ink">
-                            Método de login
-                          </p>
+                          <p className="text-sm font-medium text-ink">Método de login</p>
                         </div>
-                        <span className="text-sm text-slate">
-                          {selectedUser.loginMethod}
-                        </span>
+                        <span className="text-sm text-slate">Email / Password</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="pt-4 border-t border-border flex gap-3">
-                    <Button variant="outline" className="flex-1 border-mist">
-                      Suspender
-                    </Button>
-                    <Button className="flex-1 bg-ink hover:bg-ink/90 text-white">
-                      Guardar Cambios
-                    </Button>
-                  </div>
+                  <RoleGate required="ADMIN">
+                    <div className="pt-4 border-t border-border flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-mist"
+                        onClick={handleToggleActive}
+                        disabled={saving}
+                      >
+                        {selected.isActive ? "Suspender" : "Activar"}
+                      </Button>
+                    </div>
+                  </RoleGate>
                 </CardContent>
               </Card>
             </div>

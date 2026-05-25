@@ -3,22 +3,34 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Shield } from "lucide-react"
+import { User, Lock, Eye, EyeOff, ArrowRight, Shield, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent } from "@/components/ui/card"
+import { useAuth } from "@/hooks/useAuth"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [showPassword, setShowPassword] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [captchaChecked, setCaptchaChecked] = useState(false)
+  const { login } = useAuth()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    router.push("/dashboard")
+    setError(null)
+    setIsLoading(true)
+    try {
+      await login({ username, password })
+      router.push("/dashboard")
+    } catch {
+      setError("Usuario o contraseña incorrectos. Verifica tus credenciales.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -42,20 +54,29 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {error && (
+            <div className="mb-4 flex items-center gap-2 p-3 rounded-lg bg-coral/10 border border-coral/30 text-coral text-sm">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
+            {/* Username Field */}
             <div className="space-y-2">
               <label className="text-label-caps text-slate">
-                CORREO ELECTRÓNICO
+                USUARIO
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                 <Input
-                  type="email"
-                  placeholder="usuario@empresa.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="nombre.usuario"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
+                  required
+                  autoComplete="username"
                 />
               </div>
             </div>
@@ -81,6 +102,8 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
+                  required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -96,31 +119,23 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Captcha */}
-            <div className="flex items-center justify-between p-3 bg-cloud rounded-lg border border-mist">
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="captcha"
-                  checked={captchaChecked}
-                  onCheckedChange={(checked) => setCaptchaChecked(checked as boolean)}
-                  className="border-slate data-[state=checked]:bg-ink data-[state=checked]:border-ink"
-                />
-                <label htmlFor="captcha" className="text-sm text-foreground">
-                  No soy un robot
-                </label>
-              </div>
-              <div className="w-10 h-10 bg-emerald/20 rounded flex items-center justify-center">
-                <span className="text-emerald text-xs font-mono">rC</span>
-              </div>
-            </div>
-
             {/* Submit Button */}
             <Button
               type="submit"
+              disabled={!username || !password || isLoading}
               className="w-full h-12 bg-ink hover:bg-ink/90 text-white font-medium text-base"
             >
-              Ingresar al Sistema
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  Ingresando...
+                </>
+              ) : (
+                <>
+                  Ingresar al Sistema
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </form>
 

@@ -319,7 +319,7 @@ export default function NewInvoicePage() {
           documentType:     "NIT",
           fullName:         "Consumidor Final",
           organizationType: "NATURAL",
-          fiscalRegime:     "SIMPLIFIED",
+          fiscalRegime:     "NRES",
         }, companyId!)
         return created.id
       }
@@ -331,7 +331,7 @@ export default function NewInvoicePage() {
       documentType:     buyerData.tipoDocumento as any,
       fullName:         buyerData.razonSocial,
       organizationType: buyerData.type === "empresa" ? "JURIDICA" : "NATURAL",
-      fiscalRegime:     "ORDINARY",
+      fiscalRegime:     "RES",
       email:            buyerData.email     || undefined,
       phone:            buyerData.telefono  || undefined,
       address:          buyerData.direccion || undefined,

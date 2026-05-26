@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useAuth } from "@/hooks/useAuth"
 import { companyApi } from "@/lib/api/company"
+import { notificationsApi, type NotificationItem } from "@/lib/api/notifications"
 import type { CompanyResponse } from "@/lib/api/types"
 
 interface AppHeaderProps {
@@ -29,40 +30,19 @@ interface AppHeaderProps {
   children?: React.ReactNode
 }
 
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: "warning",
-    title: "Factura Rechazada",
-    message: "FV-2023-0895 fue rechazada por la DIAN. Regla FAD09b.",
-    time: "Hace 5 min",
-    unread: true,
-  },
-  {
-    id: 2,
-    type: "success",
-    title: "Factura Aprobada",
-    message: "FV-2023-0894 ha sido validada exitosamente.",
-    time: "Hace 15 min",
-    unread: true,
-  },
-  {
-    id: 3,
-    type: "info",
-    title: "Resolución por vencer",
-    message: "Tu resolución DIAN vence en 30 días. Renuévala pronto.",
-    time: "Hace 1 hora",
-    unread: false,
-  },
-  {
-    id: 4,
-    type: "default",
-    title: "Nuevo usuario agregado",
-    message: "Laura Martínez se unió como Contador.",
-    time: "Ayer",
-    unread: false,
-  },
-]
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return "Ahora"
+  if (diffMin < 60) return `Hace ${diffMin} min`
+  const diffHours = Math.floor(diffMin / 60)
+  if (diffHours < 24) return `Hace ${diffHours}h`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays === 1) return "Ayer"
+  return `Hace ${diffDays} días`
+}
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -76,12 +56,13 @@ export function AppHeader({ title, children }: AppHeaderProps) {
   const { user, logout } = useAuth()
   const [company, setCompany] = useState<CompanyResponse | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [notificationList, setNotificationList] = useState(INITIAL_NOTIFICATIONS)
+  const [notificationList, setNotificationList] = useState<NotificationItem[]>([])
   const unreadCount = notificationList.filter((n) => n.unread).length
 
   useEffect(() => {
     if (user?.companyId) {
       companyApi.get().then(setCompany).catch(() => {})
+      notificationsApi.getRecent().then(setNotificationList).catch(() => {})
     }
   }, [user?.companyId])
 
@@ -94,7 +75,7 @@ export function AppHeader({ title, children }: AppHeaderProps) {
     router.push('/')
   }
 
-  const markAsRead = (id: number) => {
+  const markAsRead = (id: string) => {
     setNotificationList(prev =>
       prev.map(n => n.id === id ? { ...n, unread: false } : n)
     )
@@ -173,7 +154,7 @@ export function AppHeader({ title, children }: AppHeaderProps) {
                         <p className={`text-sm font-medium text-ink ${notification.unread ? "font-semibold" : ""}`}>
                           {notification.title}
                         </p>
-                        <span className="text-xs text-slate whitespace-nowrap">{notification.time}</span>
+                        <span className="text-xs text-slate whitespace-nowrap">{formatTimeAgo(notification.createdAt)}</span>
                       </div>
                       <p className="text-sm text-slate mt-0.5 line-clamp-2">
                         {notification.message}

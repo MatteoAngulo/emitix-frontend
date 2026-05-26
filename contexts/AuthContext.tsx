@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { authApi } from '@/lib/api/auth'
-import { getToken, setToken, removeToken } from '@/lib/api/client'
+import { getToken, setToken, removeToken, apiFetch } from '@/lib/api/client'
 import type { MeResponse, LoginRequest, Role } from '@/lib/api/types'
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -76,15 +76,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    try {
-      await authApi.logout()
-    } catch {
-      // Continuar aunque falle la llamada al backend
-    } finally {
-      removeToken()
-      // Expirar la cookie de sesión
-      document.cookie = 'emitix_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      setUser(null)
+    const currentToken = getToken()
+    // Limpiar estado local PRIMERO para evitar requests con token ya blacklisteado
+    removeToken()
+    document.cookie = 'emitix_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    setUser(null)
+    // Invalidar en backend con el token capturado (best-effort)
+    if (currentToken) {
+      try {
+        await apiFetch<void>('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` },
+        })
+      } catch {
+        // Ignorar — sesión local ya cerrada
+      }
     }
   }, [])
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { reportsApi } from "@/lib/api/reports"
 import type { ReportSummaryResponse, ReportInvoiceRow } from "@/lib/api/types"
+import { useToast } from "@/components/ui/use-toast"
 
 const statusBadge: Record<string, string> = {
   ACCEPTED:  "bg-emerald/10 text-emerald border-emerald/30",
@@ -36,6 +37,7 @@ function daysAgo(days: number) {
 }
 
 export default function ReportsPage() {
+  const { toast } = useToast()
   const [period, setPeriod]     = useState("30")
   const [statusFilter, setStatusFilter] = useState("ALL")
   const [summary, setSummary]   = useState<ReportSummaryResponse | null>(null)
@@ -46,24 +48,48 @@ export default function ReportsPage() {
   const [loadingS, setLoadingS] = useState(true)
   const [loadingR, setLoadingR] = useState(true)
 
-  const fetchData = (p = 0) => {
+  const fetchData = async (p = 0) => {
     const to   = new Date().toISOString().replace(".000Z", "")
     const from = daysAgo(Number(period))
 
+    // Cargar resumen
     setLoadingS(true)
-    reportsApi.summary(from, to).then(setSummary).finally(() => setLoadingS(false))
+    try {
+      const summaryData = await reportsApi.summary(from, to)
+      setSummary(summaryData)
+    } catch (err: any) {
+      console.error("Error fetching report summary:", err)
+      toast({
+        variant: "destructive",
+        title: "Error al cargar el resumen",
+        description: err.message || "No se pudo obtener la información de resumen de facturación.",
+      })
+    } finally {
+      setLoadingS(false)
+    }
 
+    // Cargar facturas
     setLoadingR(true)
-    reportsApi.invoices({
-      from, to,
-      status: statusFilter !== "ALL" ? (statusFilter as any) : undefined,
-      page: p, size: PAGE_SIZE,
-    }).then(res => {
+    try {
+      const res = await reportsApi.invoices({
+        from, to,
+        status: statusFilter !== "ALL" ? (statusFilter as any) : undefined,
+        page: p, size: PAGE_SIZE,
+      })
       setRows(res.content)
       setTotal(res.totalElements)
       setTotalPages(res.totalPages)
       setPage(p)
-    }).finally(() => setLoadingR(false))
+    } catch (err: any) {
+      console.error("Error fetching report invoices:", err)
+      toast({
+        variant: "destructive",
+        title: "Error al cargar listado de facturas",
+        description: err.message || "Ocurrió un problema de base de datos o conexión al consultar las facturas.",
+      })
+    } finally {
+      setLoadingR(false)
+    }
   }
 
   useEffect(() => { fetchData(0) }, [period, statusFilter])

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { AppHeader } from "@/components/layout/app-header"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/use-toast"
 import { reportsApi } from "@/lib/api/reports"
 import { invoicesApi } from "@/lib/api/invoices"
 import type { ReportSummaryResponse, InvoiceResponse } from "@/lib/api/types"
@@ -34,6 +35,7 @@ const formatCOP = (n: number) =>
 
 export default function DashboardPage() {
   const { companyId } = useAuth()
+  const { toast } = useToast()
 
   const [summary, setSummary] = useState<ReportSummaryResponse | null>(null)
   const [invoices, setInvoices] = useState<InvoiceResponse[]>([])
@@ -50,8 +52,15 @@ export default function DashboardPage() {
     ]).then(([s, p]) => {
       setSummary(s)
       setInvoices(p.content)
+    }).catch((err: any) => {
+      console.error("Dashboard Load Error:", err)
+      toast({
+        title: "Error al cargar el resumen",
+        description: err.message || "No se pudieron obtener los datos operativos actuales.",
+        variant: "destructive"
+      })
     }).finally(() => setLoading(false))
-  }, [companyId])
+  }, [companyId, toast])
 
   const rejectedCount = summary?.rejectedInvoices ?? 0
 

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/use-toast"
 import { invoicesApi } from "@/lib/api/invoices"
 import type { InvoiceResponse, InvoiceStatus } from "@/lib/api/types"
 
@@ -36,6 +37,7 @@ const PAGE_SIZE = 10
 
 export default function InvoicesPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
 
   const [invoices, setInvoices]       = useState<InvoiceResponse[]>([])
   const [total, setTotal]             = useState(0)
@@ -57,6 +59,13 @@ export default function InvoicesPage() {
       setTotal(res.totalElements)
       setTotalPages(res.totalPages)
       setPage(p)
+    }).catch((err: any) => {
+      console.error("Invoices Fetch Error:", err)
+      toast({
+        title: "Error al cargar las facturas",
+        description: err.message || "No se pudo obtener el listado de facturas del servidor.",
+        variant: "destructive"
+      })
     }).finally(() => setLoading(false))
   }
 

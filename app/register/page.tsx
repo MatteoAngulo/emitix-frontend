@@ -3,19 +3,20 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  ArrowRight, 
-  Shield, 
-  Building2, 
-  User, 
-  Phone,
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Shield,
+  Building2,
+  User,
   FileText,
   CheckCircle2,
-  ArrowLeft
+  ArrowLeft,
+  CreditCard,
+  MapPin,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +29,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { authApi } from "@/lib/api/auth"
+import { setToken } from "@/lib/api/client"
+import { useGeography } from "@/hooks/useGeography"
+
+type TipoPersona = "JURIDICA" | "NATURAL" | ""
+type TipoDocumento = "CC" | "CE" | "PA" | ""
+
+interface FormData {
+  // Step 1 — Empresa
+  tipoPersona: TipoPersona
+  legalName: string
+  // JURIDICA
+  nit: string
+  dv: string
+  // NATURAL
+  tipoDocumento: TipoDocumento
+  numDocumento: string
+  // Geografía (opcionales)
+  departamento: string
+  ciudad: string
+  // Step 2 — Administrador
+  nombreAdmin: string
+  apellidoAdmin: string
+  emailAdmin: string
+  password: string
+  confirmPassword: string
+}
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -37,21 +65,20 @@ export default function RegisterPage() {
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [errorMsg, setErrorMsg] = useState("")
+  const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null)
 
-  const [formData, setFormData] = useState({
-    // Paso 1: Datos de la empresa
-    razonSocial: "",
-    nit: "",
-    digitoVerificacion: "",
+  const { departments, cities, loadingDepts, loadingCities, loadCities } = useGeography()
+
+  const [formData, setFormData] = useState<FormData>({
     tipoPersona: "",
-    regimen: "",
-    // Paso 2: Datos de contacto
-    email: "",
-    telefono: "",
-    direccion: "",
-    ciudad: "",
+    legalName: "",
+    nit: "",
+    dv: "",
+    tipoDocumento: "",
+    numDocumento: "",
     departamento: "",
-    // Paso 3: Usuario administrador
+    ciudad: "",
     nombreAdmin: "",
     apellidoAdmin: "",
     emailAdmin: "",
@@ -59,35 +86,83 @@ export default function RegisterPage() {
     confirmPassword: "",
   })
 
-  const updateField = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const updateField = <K extends keyof FormData>(field: K, value: FormData[K]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleDepartmentChange = (deptName: string) => {
+    const dept = departments.find((d) => d.name === deptName)
+    updateField("departamento", deptName)
+    updateField("ciudad", "")
+    setSelectedDeptId(dept?.id ?? null)
+    loadCities(dept?.id ?? null)
+  }
+
+  const canProceed = (): boolean => {
+    if (step === 1) {
+      if (!formData.tipoPersona || !formData.legalName) return false
+      if (formData.tipoPersona === "JURIDICA") return !!formData.nit
+      if (formData.tipoPersona === "NATURAL") return !!formData.tipoDocumento && !!formData.numDocumento
+    }
+    if (step === 2) {
+      return (
+        !!formData.nombreAdmin &&
+        !!formData.emailAdmin &&
+        formData.password.length >= 6 &&
+        formData.password === formData.confirmPassword &&
+        acceptTerms
+      )
+    }
+    return false
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (step < 3) {
-      setStep(step + 1)
-    } else {
-      setIsSubmitting(true)
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      setIsSubmitting(false)
-      setIsComplete(true)
-    }
-  }
+    setErrorMsg("")
 
-  const canProceed = () => {
     if (step === 1) {
-      return formData.razonSocial && formData.nit && formData.tipoPersona && formData.regimen
+      setStep(2)
+      return
     }
-    if (step === 2) {
-      return formData.email && formData.telefono && formData.direccion && formData.ciudad
+
+    // Step 2 — submit
+    setIsSubmitting(true)
+    try {
+      const companyNit =
+        formData.tipoPersona === "JURIDICA"
+          ? formData.nit + (formData.dv ? `-${formData.dv}` : "")
+          : formData.numDocumento
+
+      const documentType =
+        formData.tipoPersona === "JURIDICA" ? "NIT" : formData.tipoDocumento || undefined
+
+      const username = formData.emailAdmin.split("@")[0].slice(0, 50)
+      const fullName = `${formData.nombreAdmin} ${formData.apellidoAdmin}`.trim()
+
+      const res = await authApi.register({
+        username,
+        password: formData.password,
+        email: formData.emailAdmin,
+        fullName,
+        companyDocumentNumber: companyNit,
+        companyLegalName: formData.legalName,
+        organizationType: formData.tipoPersona || undefined,
+        documentType,
+      })
+
+      // Auto-login: guardar token y cookie de sesión
+      setToken(res.token)
+      document.cookie = "emitix_session=1; path=/; SameSite=Lax"
+      setIsComplete(true)
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al crear la cuenta. Intenta de nuevo."
+      setErrorMsg(msg)
+    } finally {
+      setIsSubmitting(false)
     }
-    if (step === 3) {
-      return formData.nombreAdmin && formData.emailAdmin && formData.password && 
-             formData.password === formData.confirmPassword && acceptTerms
-    }
-    return false
   }
 
   if (isComplete) {
@@ -99,23 +174,22 @@ export default function RegisterPage() {
               <CheckCircle2 className="h-10 w-10 text-emerald" />
             </div>
             <h1 className="font-display text-2xl font-bold text-ink mb-3">
-              Registro Exitoso
+              ¡Cuenta creada!
             </h1>
             <p className="text-slate mb-6">
-              Hemos enviado un correo de verificación a <strong>{formData.emailAdmin}</strong>. 
-              Por favor verifica tu cuenta para activar tu acceso a EMITIX.
+              Tu empresa y usuario administrador han sido registrados exitosamente.
             </p>
             <div className="bg-gold/10 border border-gold/30 rounded-lg p-4 mb-6">
               <p className="text-sm text-gold font-medium">
-                Importante: También deberás configurar tu Certificado Digital DIAN y 
-                resolución de numeración antes de emitir facturas.
+                Importante: configura tu Certificado Digital DIAN y resolución de
+                numeración antes de emitir facturas.
               </p>
             </div>
             <Button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/dashboard")}
               className="w-full h-12 bg-ink hover:bg-ink/90 text-white"
             >
-              Ir al Inicio de Sesión
+              Ir al Dashboard
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
@@ -130,7 +204,7 @@ export default function RegisterPage() {
         <CardContent className="pt-8 pb-8 px-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-6">
-            <Link 
+            <Link
               href="/"
               className="p-2 hover:bg-mist rounded-lg transition-colors"
             >
@@ -147,18 +221,21 @@ export default function RegisterPage() {
           </div>
 
           {/* Progress Steps */}
-          <div className="flex items-center gap-2 mb-8">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex-1 flex items-center gap-2">
-                <div className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+          <div className="relative flex items-center justify-between mb-8 px-1">
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-mist rounded-full" />
+            <div
+              className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-emerald rounded-full transition-all duration-500 ease-in-out"
+              style={{ width: step === 2 ? "100%" : "0%" }}
+            />
+            {[1, 2].map((s) => (
+              <div
+                key={s}
+                className={`
+                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium z-10 transition-all duration-500 ease-in-out
                   ${s < step ? "bg-emerald text-white" : s === step ? "bg-ink text-white" : "bg-mist text-slate"}
-                `}>
-                  {s < step ? <CheckCircle2 className="h-4 w-4" /> : s}
-                </div>
-                {s < 3 && (
-                  <div className={`flex-1 h-1 rounded-full ${s < step ? "bg-emerald" : "bg-mist"}`} />
-                )}
+                `}
+              >
+                {s < step ? <CheckCircle2 className="h-4 w-4" /> : s}
               </div>
             ))}
           </div>
@@ -169,185 +246,174 @@ export default function RegisterPage() {
               Empresa
             </span>
             <span className={`text-xs ${step === 2 ? "text-ink font-medium" : "text-slate"}`}>
-              Contacto
-            </span>
-            <span className={`text-xs ${step === 3 ? "text-ink font-medium" : "text-slate"}`}>
               Administrador
             </span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Step 1: Company Data */}
+            {/* ── Step 1: Datos de la empresa ── */}
             {step === 1 && (
               <>
+                {/* Tipo de persona */}
+                <div className="space-y-2">
+                  <label className="text-label-caps text-slate">TIPO DE PERSONA</label>
+                  <Select
+                    value={formData.tipoPersona}
+                    onValueChange={(v) => {
+                      updateField("tipoPersona", v as TipoPersona)
+                      updateField("nit", "")
+                      updateField("dv", "")
+                      updateField("tipoDocumento", "")
+                      updateField("numDocumento", "")
+                    }}
+                  >
+                    <SelectTrigger className="h-11 bg-white border-mist">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JURIDICA">Persona Jurídica</SelectItem>
+                      <SelectItem value="NATURAL">Persona Natural</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Nombre de la empresa */}
                 <div className="space-y-2">
                   <label className="text-label-caps text-slate">
-                    RAZÓN SOCIAL
+                    {formData.tipoPersona === "NATURAL" ? "NOMBRE COMERCIAL" : "RAZÓN SOCIAL"}
                   </label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                     <Input
                       type="text"
-                      placeholder="Mi Empresa S.A.S."
-                      value={formData.razonSocial}
-                      onChange={(e) => updateField("razonSocial", e.target.value)}
+                      placeholder={
+                        formData.tipoPersona === "NATURAL"
+                          ? "Tu Nombre o Nombre del Negocio"
+                          : "Mi Empresa S.A.S."
+                      }
+                      value={formData.legalName}
+                      onChange={(e) => updateField("legalName", e.target.value)}
                       className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2 space-y-2">
-                    <label className="text-label-caps text-slate">
-                      NIT
-                    </label>
-                    <div className="relative">
-                      <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
+                {/* Campos condicionales por tipo de persona */}
+                {formData.tipoPersona === "JURIDICA" && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-label-caps text-slate">NIT</label>
+                      <div className="relative">
+                        <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
+                        <Input
+                          type="text"
+                          placeholder="900.123.456"
+                          value={formData.nit}
+                          onChange={(e) => updateField("nit", e.target.value)}
+                          className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-label-caps text-slate">DV</label>
                       <Input
                         type="text"
-                        placeholder="900.123.456"
-                        value={formData.nit}
-                        onChange={(e) => updateField("nit", e.target.value)}
-                        className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
+                        placeholder="7"
+                        maxLength={1}
+                        value={formData.dv}
+                        onChange={(e) => updateField("dv", e.target.value)}
+                        className="h-11 bg-white border-mist focus:border-ink focus:ring-ink text-center"
                       />
+                    </div>
+                  </div>
+                )}
+
+                {formData.tipoPersona === "NATURAL" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-label-caps text-slate">TIPO DE DOCUMENTO</label>
+                      <Select
+                        value={formData.tipoDocumento}
+                        onValueChange={(v) => updateField("tipoDocumento", v as TipoDocumento)}
+                      >
+                        <SelectTrigger className="h-11 bg-white border-mist">
+                          <SelectValue placeholder="Tipo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CC">Cédula de Ciudadanía</SelectItem>
+                          <SelectItem value="CE">Cédula de Extranjería</SelectItem>
+                          <SelectItem value="PA">Pasaporte</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-label-caps text-slate">NÚMERO</label>
+                      <div className="relative">
+                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
+                        <Input
+                          type="text"
+                          placeholder="1234567890"
+                          value={formData.numDocumento}
+                          onChange={(e) => updateField("numDocumento", e.target.value)}
+                          className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Departamento y Ciudad */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-label-caps text-slate">
+                      DEPARTAMENTO <span className="text-slate/50 normal-case font-normal">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate z-10 pointer-events-none" />
+                      <Select
+                        value={formData.departamento}
+                        onValueChange={handleDepartmentChange}
+                        disabled={loadingDepts}
+                      >
+                        <SelectTrigger className="h-11 bg-white border-mist pl-9">
+                          <SelectValue placeholder={loadingDepts ? "Cargando..." : "Seleccionar..."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departments.map((d) => (
+                            <SelectItem key={d.id} value={d.name}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-label-caps text-slate">
-                      DV
+                      CIUDAD <span className="text-slate/50 normal-case font-normal">(opcional)</span>
                     </label>
-                    <Input
-                      type="text"
-                      placeholder="7"
-                      maxLength={1}
-                      value={formData.digitoVerificacion}
-                      onChange={(e) => updateField("digitoVerificacion", e.target.value)}
-                      className="h-11 bg-white border-mist focus:border-ink focus:ring-ink text-center"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    TIPO DE PERSONA
-                  </label>
-                  <Select 
-                    value={formData.tipoPersona} 
-                    onValueChange={(v) => updateField("tipoPersona", v)}
-                  >
-                    <SelectTrigger className="h-11 bg-white border-mist">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="juridica">Persona Jurídica</SelectItem>
-                      <SelectItem value="natural">Persona Natural</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    RÉGIMEN TRIBUTARIO
-                  </label>
-                  <Select 
-                    value={formData.regimen} 
-                    onValueChange={(v) => updateField("regimen", v)}
-                  >
-                    <SelectTrigger className="h-11 bg-white border-mist">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="responsable">Responsable de IVA</SelectItem>
-                      <SelectItem value="no_responsable">No Responsable de IVA</SelectItem>
-                      <SelectItem value="gran_contribuyente">Gran Contribuyente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-
-            {/* Step 2: Contact Data */}
-            {step === 2 && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    CORREO ELECTRÓNICO EMPRESARIAL
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
-                    <Input
-                      type="email"
-                      placeholder="facturacion@miempresa.com"
-                      value={formData.email}
-                      onChange={(e) => updateField("email", e.target.value)}
-                      className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
-                    />
-                  </div>
-                  <p className="text-xs text-slate">
-                    Este correo se usará para notificaciones de facturación
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    TELÉFONO
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
-                    <Input
-                      type="tel"
-                      placeholder="300 123 4567"
-                      value={formData.telefono}
-                      onChange={(e) => updateField("telefono", e.target.value)}
-                      className="pl-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    DIRECCIÓN FISCAL
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="Cra 45 # 123-45, Edificio Centro"
-                    value={formData.direccion}
-                    onChange={(e) => updateField("direccion", e.target.value)}
-                    className="h-11 bg-white border-mist focus:border-ink focus:ring-ink"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-label-caps text-slate">
-                      CIUDAD
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="Bogotá"
+                    <Select
                       value={formData.ciudad}
-                      onChange={(e) => updateField("ciudad", e.target.value)}
-                      className="h-11 bg-white border-mist focus:border-ink focus:ring-ink"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-label-caps text-slate">
-                      DEPARTAMENTO
-                    </label>
-                    <Select 
-                      value={formData.departamento} 
-                      onValueChange={(v) => updateField("departamento", v)}
+                      onValueChange={(v) => updateField("ciudad", v)}
+                      disabled={!formData.departamento || loadingCities}
                     >
                       <SelectTrigger className="h-11 bg-white border-mist">
-                        <SelectValue placeholder="Seleccionar..." />
+                        <SelectValue
+                          placeholder={
+                            !formData.departamento
+                              ? "Elige departamento"
+                              : loadingCities
+                              ? "Cargando..."
+                              : "Seleccionar..."
+                          }
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="bogota">Bogotá D.C.</SelectItem>
-                        <SelectItem value="antioquia">Antioquia</SelectItem>
-                        <SelectItem value="valle">Valle del Cauca</SelectItem>
-                        <SelectItem value="atlantico">Atlántico</SelectItem>
-                        <SelectItem value="santander">Santander</SelectItem>
-                        <SelectItem value="cundinamarca">Cundinamarca</SelectItem>
+                        {cities.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -355,14 +421,12 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* Step 3: Admin User */}
-            {step === 3 && (
+            {/* ── Step 2: Administrador ── */}
+            {step === 2 && (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <label className="text-label-caps text-slate">
-                      NOMBRE
-                    </label>
+                    <label className="text-label-caps text-slate">NOMBRE</label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                       <Input
@@ -375,9 +439,7 @@ export default function RegisterPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-label-caps text-slate">
-                      APELLIDO
-                    </label>
+                    <label className="text-label-caps text-slate">APELLIDO</label>
                     <Input
                       type="text"
                       placeholder="Pérez"
@@ -389,9 +451,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    CORREO DEL ADMINISTRADOR
-                  </label>
+                  <label className="text-label-caps text-slate">CORREO DEL ADMINISTRADOR</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                     <Input
@@ -405,14 +465,12 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    CONTRASEÑA
-                  </label>
+                  <label className="text-label-caps text-slate">CONTRASEÑA</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                     <Input
                       type={showPassword ? "text" : "password"}
-                      placeholder="Mínimo 8 caracteres"
+                      placeholder="Mínimo 6 caracteres"
                       value={formData.password}
                       onChange={(e) => updateField("password", e.target.value)}
                       className="pl-10 pr-10 h-11 bg-white border-mist focus:border-ink focus:ring-ink"
@@ -428,9 +486,7 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-label-caps text-slate">
-                    CONFIRMAR CONTRASEÑA
-                  </label>
+                  <label className="text-label-caps text-slate">CONFIRMAR CONTRASEÑA</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate" />
                     <Input
@@ -445,7 +501,11 @@ export default function RegisterPage() {
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-ink"
                     >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
                   {formData.confirmPassword && formData.password !== formData.confirmPassword && (
@@ -462,26 +522,40 @@ export default function RegisterPage() {
                   />
                   <label htmlFor="terms" className="text-sm text-foreground leading-relaxed">
                     Acepto los{" "}
-                    <Link href="#" className="text-emerald hover:underline">
+                    <Link
+                      href="/terminos"
+                      target="_blank"
+                      className="text-emerald hover:underline"
+                    >
                       Términos y Condiciones
                     </Link>{" "}
                     y la{" "}
-                    <Link href="#" className="text-emerald hover:underline">
+                    <Link
+                      href="/privacidad"
+                      target="_blank"
+                      className="text-emerald hover:underline"
+                    >
                       Política de Privacidad
                     </Link>{" "}
                     de EMITIX.
                   </label>
                 </div>
+
+                {errorMsg && (
+                  <div className="p-3 bg-coral/10 border border-coral/30 rounded-lg">
+                    <p className="text-sm text-coral">{errorMsg}</p>
+                  </div>
+                )}
               </>
             )}
 
-            {/* Navigation Buttons */}
+            {/* Botones de navegación */}
             <div className="flex gap-3 pt-2">
               {step > 1 && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setStep(step - 1)}
+                  onClick={() => setStep(1)}
                   className="flex-1 h-12 border-mist"
                 >
                   Atrás
@@ -497,7 +571,7 @@ export default function RegisterPage() {
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
                     Creando cuenta...
                   </>
-                ) : step === 3 ? (
+                ) : step === 2 ? (
                   <>
                     Crear Cuenta
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -522,12 +596,9 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          {/* Security Notice */}
-          <div className="mt-4">
-            <div className="flex items-center justify-center gap-2 text-slate text-xs">
-              <Shield className="h-3.5 w-3.5" />
-              <span className="font-mono">Conexión Segura DIAN</span>
-            </div>
+          <div className="mt-4 flex items-center justify-center gap-2 text-slate text-xs">
+            <Shield className="h-3.5 w-3.5" />
+            <span className="font-mono">Conexión Segura DIAN</span>
           </div>
         </CardContent>
       </Card>

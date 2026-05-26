@@ -15,7 +15,7 @@ import type { NextRequest } from 'next/server'
  * Estrategia: si no existe la cookie "emitix_session" → redirigir a /
  */
 
-const PUBLIC_PATHS = ['/', '/register', '/forgot-password']
+const PUBLIC_PATHS = ['/', '/register', '/forgot-password', '/terminos', '/privacidad']
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

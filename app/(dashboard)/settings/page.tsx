@@ -39,7 +39,7 @@ export default function SettingsPage() {
       setCompany(c)
       setResolutions(r)
       setLegalName(c.legalName ?? "")
-      setNit(c.nit ?? "")
+      setNit(c.documentNumber ?? "")
       setAddress(c.address ?? "")
       setCity(c.city ?? "")
       setPhone(c.phone ?? "")
@@ -52,7 +52,7 @@ export default function SettingsPage() {
     setSaveMsg(null)
     try {
       const updated = await companyApi.update({
-        nit, legalName, address, city, phone, email,
+        documentNumber: nit, legalName, address, city, phone, email,
       })
       setCompany(updated)
       setSaveMsg("Cambios guardados correctamente.")

@@ -45,9 +45,10 @@ export interface RegisterRequest {
   password: string
   email: string
   fullName: string
-  phone?: string
-  companyNit: string
+  companyDocumentNumber: string
   companyLegalName: string
+  organizationType?: 'JURIDICA' | 'NATURAL'
+  documentType?: string
 }
 
 export interface ForgotPasswordRequest {
@@ -68,7 +69,7 @@ export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'ACCOUNTANT' | 'VIEWER'
 
 export interface CompanyResponse {
   id: string
-  nit: string
+  documentNumber: string
   legalName: string
   address: string | null
   city: string | null
@@ -80,7 +81,7 @@ export interface CompanyResponse {
 }
 
 export interface CompanyRequest {
-  nit: string
+  documentNumber: string
   legalName: string
   address?: string
   city?: string

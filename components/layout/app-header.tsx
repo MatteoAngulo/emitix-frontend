@@ -29,7 +29,7 @@ interface AppHeaderProps {
   children?: React.ReactNode
 }
 
-const notifications = [
+const INITIAL_NOTIFICATIONS = [
   {
     id: 1,
     type: "warning",
@@ -76,7 +76,8 @@ export function AppHeader({ title, children }: AppHeaderProps) {
   const { user, logout } = useAuth()
   const [company, setCompany] = useState<CompanyResponse | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const unreadCount = notifications.filter((n) => n.unread).length
+  const [notificationList, setNotificationList] = useState(INITIAL_NOTIFICATIONS)
+  const unreadCount = notificationList.filter((n) => n.unread).length
 
   useEffect(() => {
     if (user?.companyId) {
@@ -91,6 +92,18 @@ export function AppHeader({ title, children }: AppHeaderProps) {
   const handleLogout = async () => {
     await logout()
     router.push('/')
+  }
+
+  const markAsRead = (id: number) => {
+    setNotificationList(prev =>
+      prev.map(n => n.id === id ? { ...n, unread: false } : n)
+    )
+  }
+
+  const markAllAsRead = () => {
+    setNotificationList(prev =>
+      prev.map(n => ({ ...n, unread: false }))
+    )
   }
 
   return (
@@ -116,16 +129,29 @@ export function AppHeader({ title, children }: AppHeaderProps) {
           <PopoverContent className="w-96 p-0" align="end">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h3 className="font-display font-semibold text-ink">Notificaciones</h3>
-              {unreadCount > 0 && (
-                <Badge variant="secondary" className="bg-coral/10 text-coral">
-                  {unreadCount} nuevas
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={markAllAsRead}
+                      className="text-xs h-auto p-1 px-2 text-emerald hover:text-emerald/80 font-medium hover:bg-emerald/5 rounded"
+                    >
+                      Marcar todas
+                    </Button>
+                    <Badge variant="secondary" className="bg-coral/10 text-coral font-mono text-xs">
+                      {unreadCount}
+                    </Badge>
+                  </>
+                )}
+              </div>
             </div>
             <div className="max-h-[400px] overflow-y-auto">
-              {notifications.map((notification) => (
+              {notificationList.map((notification) => (
                 <div
                   key={notification.id}
+                  onClick={() => markAsRead(notification.id)}
                   className={`px-4 py-3 border-b border-border last:border-0 hover:bg-cloud/50 cursor-pointer transition-colors ${
                     notification.unread ? "bg-cloud/30" : ""
                   }`}

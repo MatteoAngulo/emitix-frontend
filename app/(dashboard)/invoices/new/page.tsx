@@ -58,7 +58,8 @@ import { useAuth } from "@/hooks/useAuth"
 import { buyersApi } from "@/lib/api/buyers"
 import { productsApi } from "@/lib/api/products"
 import { invoicesApi } from "@/lib/api/invoices"
-import type { ProductResponse, PaymentMethod, InvoiceType } from "@/lib/api/types"
+import { companyApi } from "@/lib/api/company"
+import type { ProductResponse, PaymentMethod, InvoiceType, CompanyResponse } from "@/lib/api/types"
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -120,6 +121,14 @@ const formatCOP = (n: number) =>
 export default function NewInvoicePage() {
   const router    = useRouter()
   const { companyId } = useAuth()
+
+  const [company, setCompany] = useState<CompanyResponse | null>(null)
+
+  useEffect(() => {
+    if (companyId) {
+      companyApi.get().then(setCompany).catch(() => {})
+    }
+  }, [companyId])
 
   // Step state
   const [currentStep, setCurrentStep]   = useState<StepId>(1)
@@ -419,11 +428,32 @@ export default function NewInvoicePage() {
       // ── Step 1: Tipo de documento ─────────────────────────────────────────
       case 1:
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-display text-ink">Tipo de Documento Electrónico</CardTitle>
-              <p className="text-sm text-slate">Seleccione el tipo de documento que desea generar</p>
-            </CardHeader>
+          <div className="space-y-6">
+            {company && (
+              <Card className="border-emerald/30 bg-emerald/5 shadow-sm">
+                <CardContent className="pt-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald/10 rounded-lg">
+                      <Shield className="h-5 w-5 text-emerald" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-emerald font-semibold uppercase tracking-wider">Empresa Emisora (Facturador)</p>
+                      <h3 className="font-display font-bold text-ink text-lg mt-0.5">{company.legalName}</h3>
+                      <p className="text-sm text-slate font-mono">NIT: {company.documentNumber} - Responsable de IVA</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-emerald text-white hover:bg-emerald/90 flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Verificado DIAN
+                  </Badge>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-display text-ink">Tipo de Documento Electrónico</CardTitle>
+                <p className="text-sm text-slate">Seleccione el tipo de documento que desea generar</p>
+              </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {documentTypeOptions.map(type => (
@@ -447,6 +477,7 @@ export default function NewInvoicePage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         )
 
       // ── Step 2: Comprador ─────────────────────────────────────────────────
@@ -867,6 +898,17 @@ export default function NewInvoicePage() {
                 <p className="text-sm text-slate">Verifique la información antes de emitir el documento</p>
               </CardHeader>
               <CardContent className="space-y-4">
+                {company && (
+                  <div className="p-4 rounded-lg bg-emerald/5 border border-emerald/20 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-emerald font-semibold uppercase tracking-wider">EMISOR (TU EMPRESA)</p>
+                      <p className="font-semibold text-ink mt-0.5">{company.legalName}</p>
+                      <p className="text-xs text-slate font-mono">NIT: {company.documentNumber}</p>
+                    </div>
+                    <Badge className="bg-emerald/10 text-emerald border-emerald/30">Activo</Badge>
+                  </div>
+                )}
+
                 <div className="p-4 rounded-lg bg-cloud/50 border border-border">
                   <p className="text-label-caps text-slate mb-1">TIPO DE DOCUMENTO</p>
                   <p className="font-medium text-ink">

@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -11,9 +12,12 @@ import {
   BarChart3,
   History,
   Plus,
+  Shield,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/useAuth"
+import { companyApi } from "@/lib/api/company"
+import type { CompanyResponse } from "@/lib/api/types"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -27,6 +31,13 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { user } = useAuth()
+  const [company, setCompany] = useState<CompanyResponse | null>(null)
+
+  useEffect(() => {
+    if (user?.companyId) {
+      companyApi.get().then(setCompany).catch(() => {})
+    }
+  }, [user?.companyId])
 
   const initials = user?.fullName
     ? user.fullName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -35,19 +46,21 @@ export function AppSidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col bg-ink">
       {/* Logo */}
-      <div className="flex h-16 items-center px-6">
+      <div className="flex h-16 flex-col justify-center px-6 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <svg width="32" height="32" viewBox="0 0 80 80">
+          <svg width="28" height="28" viewBox="0 0 80 80">
             <circle cx="40" cy="40" r="40" fill="rgba(255,255,255,0.07)" />
             <rect x="20" y="24" width="40" height="8" rx="4" fill="#00C880" />
             <rect x="20" y="36" width="27" height="7" rx="3.5" fill="#F5A52A" />
             <rect x="20" y="47" width="40" height="8" rx="4" fill="white" />
           </svg>
-          <div className="flex flex-col">
-            <span className="font-display text-lg font-bold tracking-tight text-white">
+          <div className="flex flex-col min-w-0">
+            <span className="font-display text-base font-bold tracking-tight text-white leading-tight">
               EMITIX
             </span>
-            <span className="text-[10px] text-white/50">Electronic Billing</span>
+            <span className="text-[9px] text-emerald font-medium truncate max-w-[130px]">
+              {company ? company.legalName : "Cargando empresa..."}
+            </span>
           </div>
         </Link>
       </div>
@@ -101,6 +114,12 @@ export function AppSidebar() {
               {user?.fullName ?? 'Cargando...'}
             </p>
             <p className="truncate text-xs text-white/50">{user?.email ?? ''}</p>
+            {company && (
+              <p className="truncate text-[10px] text-emerald mt-0.5 flex items-center gap-1 font-mono">
+                <Shield className="h-3 w-3" />
+                NIT {company.documentNumber}
+              </p>
+            )}
           </div>
         </div>
       </div>

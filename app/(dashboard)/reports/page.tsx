@@ -92,6 +92,56 @@ export default function ReportsPage() {
     }
   }
 
+  const handleExportCSV = () => {
+    if (rows.length === 0) {
+      alert("No hay datos disponibles para exportar.")
+      return
+    }
+    const headers = ["Numero", "Fecha Emision", "Adquiriente", "Total COP", "Estado"]
+    const csvRows = [
+      headers.join(","),
+      ...rows.map(row => [
+        `"${row.number}"`,
+        `"${new Date(row.createdAt).toLocaleDateString("es-CO")}"`,
+        `"${row.buyerName.replace(/"/g, '""')}"`,
+        row.total,
+        `"${row.status}"`
+      ].join(","))
+    ]
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `emitix_reporte_${period}_dias.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleExportJSON = () => {
+    if (rows.length === 0) {
+      alert("No hay datos disponibles para exportar.")
+      return
+    }
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+      summary,
+      periodDays: period,
+      statusFilter,
+      generatedAt: new Date().toISOString(),
+      invoices: rows
+    }, null, 2))
+    const link = document.createElement("a")
+    link.setAttribute("href", dataStr)
+    link.setAttribute("download", `emitix_reporte_${period}_dias.json`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
   useEffect(() => { fetchData(0) }, [period, statusFilter])
 
   return (
@@ -220,6 +270,26 @@ export default function ReportsPage() {
 
         {/* Results Table */}
         <Card>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 pb-2 border-b border-border gap-4">
+            <div>
+              <h2 className="font-display text-xl font-bold text-ink">Resultados del Reporte</h2>
+              <p className="text-sm text-slate">Detalle de facturación correspondiente a los filtros aplicados.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleExportCSV} className="border-mist text-ink hover:text-emerald">
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald" />
+                Exportar CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportJSON} className="border-mist text-ink hover:text-ocean">
+                <Code2 className="mr-2 h-4 w-4 text-ocean" />
+                Exportar JSON
+              </Button>
+              <Button variant="outline" size="sm" onClick={handlePrint} className="border-mist text-ink hover:text-coral">
+                <FileText className="mr-2 h-4 w-4 text-coral" />
+                Imprimir
+              </Button>
+            </div>
+          </div>
           <CardContent className="pt-6">
             <table className="w-full">
               <thead>

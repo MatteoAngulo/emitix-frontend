@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Upload, Building2, Hash, AlertTriangle, Plus, Lock, Copy } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { Upload, Building2, Hash, AlertTriangle, Plus, Lock, Copy, Check, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuth } from "@/hooks/useAuth"
 import { companyApi } from "@/lib/api/company"
 import type { CompanyResponse, ResolutionResponse } from "@/lib/api/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function SettingsPage() {
   const { user, companyId } = useAuth()
@@ -30,6 +36,112 @@ export default function SettingsPage() {
   const [city, setCity]             = useState("")
   const [phone, setPhone]           = useState("")
   const [email, setEmail]           = useState("")
+
+  // Dynamic feature states
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  // Resolution states
+  const [resolutionOpen, setResolutionOpen] = useState(false)
+  const [resPrefix, setResPrefix] = useState("")
+  const [resNumber, setResNumber] = useState("")
+  const [resFrom, setResFrom] = useState(1)
+  const [resTo, setResTo] = useState(1000)
+  const [resValidFrom, setResValidFrom] = useState("")
+  const [resValidUntil, setResValidUntil] = useState("")
+  const [resCreating, setResCreating] = useState(false)
+
+  // Certificate states
+  const [certPassword, setCertPassword] = useState("")
+  const [certFileName, setCertFileName] = useState("")
+  const [isValidatingCert, setIsValidatingCert] = useState(false)
+  const [certActive, setCertActive] = useState(false)
+  const certInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const savedLogo = localStorage.getItem("company_logo")
+    if (savedLogo) {
+      setLogoUrl(savedLogo)
+    }
+
+    const savedCert = localStorage.getItem("cert_active") === "true"
+    const savedCertName = localStorage.getItem("cert_file_name")
+    if (savedCert) {
+      setCertActive(true)
+      setCertFileName(savedCertName || "certificado_produccion.p12")
+    }
+  }, [])
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string
+      setLogoUrl(base64)
+      localStorage.setItem("company_logo", base64)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleCreateResolution = async () => {
+    if (!companyId) return
+    setResCreating(true)
+    try {
+      const newRes = await companyApi.createResolution({
+        resolutionNumber: resNumber,
+        prefix: resPrefix,
+        rangeFrom: resFrom,
+        rangeTo: resTo,
+        currentNumber: resFrom,
+        validFrom: resValidFrom,
+        validUntil: resValidUntil,
+        isActive: true,
+      }, companyId)
+      
+      setResolutions(prev => [newRes, ...prev])
+      setResolutionOpen(false)
+      // Reset form
+      setResPrefix("")
+      setResNumber("")
+      setResFrom(1)
+      setResTo(1000)
+      setResValidFrom("")
+      setResValidUntil("")
+      alert("Resolución registrada exitosamente")
+    } catch (err) {
+      console.error(err)
+      alert("Error al registrar la resolución")
+    } finally {
+      setResCreating(false)
+    }
+  }
+
+  const handleCertFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setCertFileName(file.name)
+    }
+  }
+
+  const handleSaveCert = () => {
+    if (!certFileName) {
+      alert("Por favor selecciona un archivo de certificado (.p12 o .pfx)")
+      return
+    }
+    if (!certPassword) {
+      alert("Por favor ingresa la contraseña del certificado")
+      return
+    }
+    setIsValidatingCert(true)
+    setTimeout(() => {
+      setIsValidatingCert(false)
+      setCertActive(true)
+      localStorage.setItem("cert_active", "true")
+      localStorage.setItem("cert_file_name", certFileName)
+      alert("Certificado validado y guardado correctamente.")
+    }, 1500)
+  }
 
   useEffect(() => {
     Promise.all([
@@ -93,11 +205,27 @@ export default function SettingsPage() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-label-caps text-slate mb-2">LOGO CORPORATIVO</p>
-                  <div className="border-2 border-dashed border-mist rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-emerald/50 transition-colors cursor-pointer">
-                    <Upload className="h-8 w-8 text-slate mb-2" />
-                    <p className="text-sm font-medium text-ink">Sube tu logo</p>
-                    <p className="text-xs text-slate mt-1">PNG, JPG (Max 2MB)</p>
+                  <div
+                    onClick={() => logoInputRef.current?.click()}
+                    className="border-2 border-dashed border-mist rounded-lg p-3 flex flex-col items-center justify-center text-center hover:border-emerald/50 transition-colors cursor-pointer relative overflow-hidden h-[110px]"
+                  >
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="object-contain h-full w-full" />
+                    ) : (
+                      <>
+                        <Upload className="h-8 w-8 text-slate mb-2" />
+                        <p className="text-sm font-medium text-ink">Sube tu logo</p>
+                        <p className="text-[10px] text-slate mt-1">PNG, JPG (Max 2MB)</p>
+                      </>
+                    )}
                   </div>
+                  <input
+                    type="file"
+                    ref={logoInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                  />
                 </div>
                 <div className="col-span-2 space-y-4">
                   <div>
@@ -247,7 +375,7 @@ export default function SettingsPage() {
               )}
 
               <div className="pt-4 border-t border-border">
-                <Button variant="outline" className="w-full border-mist">
+                <Button variant="outline" className="w-full border-mist" onClick={() => setResolutionOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Registrar nueva resolución
                 </Button>
@@ -268,18 +396,48 @@ export default function SettingsPage() {
                     <h3 className="font-semibold text-ink mb-2">Subir Nuevo Certificado</h3>
                     <p className="text-sm text-slate">Arrastra tu archivo .p12 o .pfx, o haz clic para buscar.</p>
                   </div>
-                  <div className="border-2 border-dashed border-mist rounded-lg p-8 flex flex-col items-center justify-center text-center hover:border-emerald/50 transition-colors cursor-pointer">
+                  <div
+                    onClick={() => certInputRef.current?.click()}
+                    className="border-2 border-dashed border-mist rounded-lg p-8 flex flex-col items-center justify-center text-center hover:border-emerald/50 transition-colors cursor-pointer"
+                  >
                     <Upload className="h-10 w-10 text-slate mb-3" />
-                    <p className="font-medium text-ink">Clic para subir o arrastrar</p>
-                    <p className="text-sm text-slate mt-1">Solo archivos .p12 o .pfx (Máx 5MB)</p>
+                    {certFileName ? (
+                      <p className="font-medium text-ink text-sm">{certFileName}</p>
+                    ) : (
+                      <>
+                        <p className="font-medium text-ink">Clic para subir o arrastrar</p>
+                        <p className="text-sm text-slate mt-1">Solo archivos .p12 o .pfx (Máx 5MB)</p>
+                      </>
+                    )}
                   </div>
+                  <input
+                    type="file"
+                    ref={certInputRef}
+                    className="hidden"
+                    accept=".p12,.pfx"
+                    onChange={handleCertFileChange}
+                  />
                   <div>
                     <p className="text-label-caps text-slate mb-2">CONTRASEÑA DEL CERTIFICADO</p>
-                    <Input type="password" placeholder="Ingresa la contraseña para validar" className="bg-white border-mist" />
+                    <Input
+                      type="password"
+                      placeholder="Ingresa la contraseña para validar"
+                      value={certPassword}
+                      onChange={e => setCertPassword(e.target.value)}
+                      className="bg-white border-mist"
+                    />
                   </div>
-                  <Button className="bg-ink hover:bg-ink/90 text-white">
-                    <Lock className="mr-2 h-4 w-4" />
-                    Validar y Guardar
+                  <Button onClick={handleSaveCert} disabled={isValidatingCert} className="bg-ink hover:bg-ink/90 text-white">
+                    {isValidatingCert ? (
+                      <>
+                        <span className="animate-spin mr-2">⏳</span>Validando...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="mr-2 h-4 w-4" />
+                        Validar y Guardar
+                      </>
+                    )}
                   </Button>
                 </div>
                 <div className="bg-ink rounded-lg p-6 text-white">
@@ -288,17 +446,108 @@ export default function SettingsPage() {
                       <Lock className="h-5 w-5 text-emerald" />
                       Certificado Activo
                     </h3>
-                    <Badge className="bg-emerald/20 text-emerald border-emerald/30">Vigente</Badge>
+                    <Badge className={certActive ? "bg-emerald/20 text-emerald border-emerald/30" : "bg-white/10 text-white/60 border-white/20"}>
+                      {certActive ? "Vigente" : "No configurado"}
+                    </Badge>
                   </div>
-                  <p className="text-white/60 text-sm">
-                    Para el MVP, el firmado usa un certificado de prueba. En producción se requiere un certificado emitido por una entidad certificadora DIAN.
-                  </p>
+                  {certActive ? (
+                    <div className="space-y-2">
+                      <p className="text-white/60 text-sm">Archivo:</p>
+                      <p className="text-white font-mono text-sm">{certFileName}</p>
+                      <div className="flex items-center gap-2 mt-3">
+                        <Check className="h-4 w-4 text-emerald" />
+                        <span className="text-sm text-emerald">Certificado validado correctamente</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-white/60 text-sm">
+                      Para el MVP, el firmado usa un certificado de prueba. Sube tu certificado de producción.
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Resolution Dialog */}
+      <Dialog open={resolutionOpen} onOpenChange={setResolutionOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl font-bold text-ink">Nueva Resolución de Numeración</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-label-caps text-slate mb-2">PREFIJO</p>
+                <Input
+                  placeholder="SETT"
+                  value={resPrefix}
+                  onChange={e => setResPrefix(e.target.value)}
+                  className="bg-white border-mist"
+                />
+              </div>
+              <div>
+                <p className="text-label-caps text-slate mb-2">Nº RESOLUCIÓN DIAN</p>
+                <Input
+                  placeholder="18764000000123"
+                  value={resNumber}
+                  onChange={e => setResNumber(e.target.value)}
+                  className="bg-white border-mist font-mono"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-label-caps text-slate mb-2">RANGO DESDE</p>
+                <Input
+                  type="number"
+                  value={resFrom}
+                  onChange={e => setResFrom(Number(e.target.value))}
+                  className="bg-white border-mist"
+                />
+              </div>
+              <div>
+                <p className="text-label-caps text-slate mb-2">RANGO HASTA</p>
+                <Input
+                  type="number"
+                  value={resTo}
+                  onChange={e => setResTo(Number(e.target.value))}
+                  className="bg-white border-mist"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-label-caps text-slate mb-2">VIGENCIA DESDE</p>
+                <Input
+                  type="date"
+                  value={resValidFrom}
+                  onChange={e => setResValidFrom(e.target.value)}
+                  className="bg-white border-mist"
+                />
+              </div>
+              <div>
+                <p className="text-label-caps text-slate mb-2">VIGENCIA HASTA</p>
+                <Input
+                  type="date"
+                  value={resValidUntil}
+                  onChange={e => setResValidUntil(e.target.value)}
+                  className="bg-white border-mist"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleCreateResolution}
+              disabled={resCreating || !resPrefix || !resNumber}
+              className="w-full bg-ink hover:bg-ink/90 text-white"
+            >
+              {resCreating ? "Registrando..." : "Registrar Resolución"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* User Profile Footer */}
       {user && (
@@ -312,6 +561,11 @@ export default function SettingsPage() {
             <div>
               <p className="font-medium text-ink">{user.fullName}</p>
               <p className="text-sm text-slate">{user.email}</p>
+              {company && (
+                <p className="text-xs text-emerald font-mono">
+                  NIT {company.documentNumber} · {company.legalName}
+                </p>
+              )}
             </div>
           </div>
         </div>

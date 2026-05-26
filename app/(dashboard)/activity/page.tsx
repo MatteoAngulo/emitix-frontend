@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AppHeader } from "@/components/layout/app-header"
 import { activityApi } from "@/lib/api/activity"
 import type { ActivityResponse } from "@/lib/api/types"
+import { useToast } from "@/hooks/use-toast"
 
 const PAGE_SIZE = 15
 
@@ -19,6 +20,7 @@ function initials(username: string) {
 }
 
 export default function ActivityLogPage() {
+  const { toast } = useToast()
   const [activities, setActivities] = useState<ActivityResponse[]>([])
   const [total, setTotal]           = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -37,6 +39,13 @@ export default function ActivityLogPage() {
       setTotal(res.totalElements)
       setTotalPages(res.totalPages)
       setPage(p)
+    }).catch(err => {
+      console.error("Error al cargar log de actividad:", err)
+      toast({
+        title: "Error de carga",
+        description: err.message || "No se pudieron obtener los logs de actividad.",
+        variant: "destructive",
+      })
     }).finally(() => setLoading(false))
   }
 

@@ -13,6 +13,20 @@ import { useAuth } from "@/hooks/useAuth"
 import { RoleGate } from "@/components/auth/RoleGate"
 import { usersApi } from "@/lib/api/users"
 import type { UserResponse } from "@/lib/api/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
@@ -41,6 +55,43 @@ export default function UsersPage() {
   const [search, setSearch]         = useState("")
   const [selected, setSelected]     = useState<UserResponse | null>(null)
   const [saving, setSaving]         = useState(false)
+
+  // Invite states
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteName, setInviteName] = useState("")
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("VIEWER")
+  const [inviting, setInviting]     = useState(false)
+
+  const handleInviteUser = async () => {
+    if (!companyId) return
+    if (!inviteName || !inviteEmail) {
+      alert("Por favor completa los campos obligatorios.")
+      return
+    }
+    setInviting(true)
+    try {
+      const newUser = await usersApi.create({
+        username: inviteEmail.split("@")[0] + "_" + Math.floor(Math.random() * 1000),
+        fullName: inviteName,
+        email: inviteEmail,
+        password: "TempPassword123*",
+        role: inviteRole as 'ADMIN' | 'ACCOUNTANT' | 'VIEWER',
+      }, companyId)
+      
+      setUsers(prev => [newUser, ...prev])
+      setInviteOpen(false)
+      setInviteName("")
+      setInviteEmail("")
+      setInviteRole("VIEWER")
+      alert(`Usuario invitado exitosamente.\nNombre: ${newUser.fullName}\nRol: ${roleLabel[newUser.role]}\nContraseña temporal: TempPassword123*`)
+    } catch (err) {
+      console.error(err)
+      alert("Error al invitar al usuario. Por favor verifica los datos.")
+    } finally {
+      setInviting(false)
+    }
+  }
 
   const fetchUsers = () => {
     setLoading(true)
@@ -85,7 +136,7 @@ export default function UsersPage() {
                 <p className="text-slate mt-1">Administra los niveles de acceso y permisos del sistema.</p>
               </div>
               <RoleGate required="ADMIN">
-                <Button className="bg-ink hover:bg-ink/90 text-white">
+                <Button className="bg-ink hover:bg-ink/90 text-white" onClick={() => setInviteOpen(true)}>
                   <UserPlus className="mr-2 h-4 w-4" />
                   Invitar usuario
                 </Button>
@@ -252,6 +303,58 @@ export default function UsersPage() {
           )}
         </div>
       </div>
+
+      {/* Invite User Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl font-bold text-ink">Invitar Nuevo Usuario</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label className="text-slate text-xs font-semibold uppercase tracking-wider mb-2 block font-display">Nombre Completo</Label>
+              <Input
+                placeholder="Nombre y Apellidos"
+                value={inviteName}
+                onChange={e => setInviteName(e.target.value)}
+                className="bg-white border-mist"
+              />
+            </div>
+            <div>
+              <Label className="text-slate text-xs font-semibold uppercase tracking-wider mb-2 block font-display">Correo Electrónico</Label>
+              <Input
+                type="email"
+                placeholder="ejemplo@empresa.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                className="bg-white border-mist"
+              />
+            </div>
+            <div>
+              <Label className="text-slate text-xs font-semibold uppercase tracking-wider mb-2 block font-display">Rol de Acceso</Label>
+              <Select value={inviteRole} onValueChange={setInviteRole}>
+                <SelectTrigger className="bg-white border-mist text-ink">
+                  <SelectValue placeholder="Selecciona un rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">Administrador (Control total)</SelectItem>
+                  <SelectItem value="ACCOUNTANT">Contador (Facturación y reportes)</SelectItem>
+                  <SelectItem value="VIEWER">Solo Lectura (Visualización)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="pt-4">
+              <Button
+                onClick={handleInviteUser}
+                disabled={inviting || !inviteName || !inviteEmail}
+                className="w-full bg-ink hover:bg-ink/90 text-white font-medium"
+              >
+                {inviting ? "Enviando invitación..." : "Enviar Invitación"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

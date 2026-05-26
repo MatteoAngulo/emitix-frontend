@@ -32,6 +32,7 @@ import {
 import { authApi } from "@/lib/api/auth"
 import { setToken } from "@/lib/api/client"
 import { useGeography } from "@/hooks/useGeography"
+import { useAuth } from "@/hooks/useAuth"
 
 type TipoPersona = "JURIDICA" | "NATURAL" | ""
 type TipoDocumento = "CC" | "CE" | "PA" | ""
@@ -59,12 +60,14 @@ interface FormData {
 
 export default function RegisterPage() {
   const router = useRouter()
+  const { refresh } = useAuth()
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [createdUsername, setCreatedUsername] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
   const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null)
 
@@ -150,9 +153,11 @@ export default function RegisterPage() {
         documentType,
       })
 
-      // Auto-login: guardar token y cookie de sesión
+      // Auto-login: guardar token, cookie y cargar datos del usuario en AuthContext
       setToken(res.token)
       document.cookie = "emitix_session=1; path=/; SameSite=Lax"
+      setCreatedUsername(res.username)
+      await refresh()
       setIsComplete(true)
     } catch (err: unknown) {
       const msg =
@@ -176,9 +181,13 @@ export default function RegisterPage() {
             <h1 className="font-display text-2xl font-bold text-ink mb-3">
               ¡Cuenta creada!
             </h1>
-            <p className="text-slate mb-6">
+            <p className="text-slate mb-4">
               Tu empresa y usuario administrador han sido registrados exitosamente.
             </p>
+            <div className="bg-cloud border border-mist rounded-lg p-4 mb-4 text-left">
+              <p className="text-xs text-slate mb-1">Tu usuario para iniciar sesión:</p>
+              <p className="font-mono font-semibold text-ink text-sm">{createdUsername}</p>
+            </div>
             <div className="bg-gold/10 border border-gold/30 rounded-lg p-4 mb-6">
               <p className="text-sm text-gold font-medium">
                 Importante: configura tu Certificado Digital DIAN y resolución de

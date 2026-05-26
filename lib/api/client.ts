@@ -65,7 +65,8 @@ export async function apiFetch<T>(
   })
 
   // 401 → token expirado o inválido → limpiar y redirigir al login
-  if (response.status === 401) {
+  // Si la petición es pública (ej. login), no redirigir — dejar que el catch del caller muestre el error
+  if (response.status === 401 && !isPublic) {
     removeToken()
     if (typeof window !== 'undefined') {
       window.location.href = '/'

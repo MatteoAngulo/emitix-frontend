@@ -13,6 +13,7 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/hooks/useAuth"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -25,6 +26,11 @@ const navigation = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { user } = useAuth()
+
+  const initials = user?.fullName
+    ? user.fullName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?'
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col bg-ink">
@@ -88,11 +94,13 @@ export function AppSidebar() {
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald text-sm font-medium text-white">
-            JD
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-medium text-white">J. Doe</p>
-            <p className="truncate text-xs text-white/50">admin@emitix.co</p>
+            <p className="truncate text-sm font-medium text-white">
+              {user?.fullName ?? 'Cargando...'}
+            </p>
+            <p className="truncate text-xs text-white/50">{user?.email ?? ''}</p>
           </div>
         </div>
       </div>

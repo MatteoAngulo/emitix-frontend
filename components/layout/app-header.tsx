@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { Bell, LogOut, User, Settings, Shield, ChevronRight, Clock } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Bell, LogOut, User, Settings, Shield, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,9 @@ import {
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { useAuth } from "@/hooks/useAuth"
+import { companyApi } from "@/lib/api/company"
+import type { CompanyResponse } from "@/lib/api/types"
 
 interface AppHeaderProps {
   title?: string
@@ -60,19 +64,34 @@ const notifications = [
   },
 ]
 
-const userProfile = {
-  name: "Juan Díaz",
-  email: "juan.diaz@emitix.co",
-  role: "Administrador",
-  company: "TechSolutions S.A.S",
-  lastLogin: "Hoy, 09:41 AM",
-  avatar: "/avatar.jpg",
-  initials: "JD",
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Administrador',
+  ACCOUNTANT: 'Contador',
+  VIEWER: 'Visualizador',
 }
 
 export function AppHeader({ title, children }: AppHeaderProps) {
+  const router = useRouter()
+  const { user, logout } = useAuth()
+  const [company, setCompany] = useState<CompanyResponse | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const unreadCount = notifications.filter((n) => n.unread).length
+
+  useEffect(() => {
+    if (user?.companyId) {
+      companyApi.get().then(setCompany).catch(() => {})
+    }
+  }, [user?.companyId])
+
+  const initials = user?.fullName
+    ? user.fullName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?'
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/')
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-white px-6">
@@ -155,9 +174,8 @@ export function AppHeader({ title, children }: AppHeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
               <Avatar className="h-9 w-9 border-2 border-emerald cursor-pointer hover:border-emerald/70 transition-colors">
-                <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
                 <AvatarFallback className="bg-ink text-white text-xs">
-                  {userProfile.initials}
+                  {initials}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -166,35 +184,31 @@ export function AppHeader({ title, children }: AppHeaderProps) {
             <DropdownMenuLabel className="font-normal">
               <div className="flex items-center gap-3 py-2">
                 <Avatar className="h-12 w-12 border-2 border-emerald">
-                  <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
                   <AvatarFallback className="bg-ink text-white">
-                    {userProfile.initials}
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col">
-                  <p className="font-display font-semibold text-ink">{userProfile.name}</p>
-                  <p className="text-sm text-slate">{userProfile.email}</p>
+                  <p className="font-display font-semibold text-ink">{user?.fullName ?? '...'}</p>
+                  <p className="text-sm text-slate">{user?.email ?? ''}</p>
                   <Badge variant="outline" className="mt-1 w-fit bg-emerald/10 text-emerald border-emerald/30 text-xs">
-                    {userProfile.role}
+                    {user?.role ? ROLE_LABELS[user.role] ?? user.role : ''}
                   </Badge>
                 </div>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <div className="px-2 py-2">
-              <div className="rounded-lg bg-cloud/50 p-3 space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Shield className="h-4 w-4 text-slate" />
-                  <span className="text-slate">Empresa:</span>
-                  <span className="text-ink font-medium">{userProfile.company}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="h-4 w-4 text-slate" />
-                  <span className="text-slate">Último acceso:</span>
-                  <span className="text-ink font-medium">{userProfile.lastLogin}</span>
+            {company && (
+              <div className="px-2 py-2">
+                <div className="rounded-lg bg-cloud/50 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Shield className="h-4 w-4 text-slate" />
+                    <span className="text-slate">Empresa:</span>
+                    <span className="text-ink font-medium truncate">{company.legalName}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/users" className="flex items-center gap-2">
@@ -209,11 +223,12 @@ export function AppHeader({ title, children }: AppHeaderProps) {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="cursor-pointer text-coral focus:text-coral focus:bg-coral/10">
-              <Link href="/" className="flex items-center gap-2">
-                <LogOut className="h-4 w-4" />
-                <span>Cerrar Sesión</span>
-              </Link>
+            <DropdownMenuItem
+              className="cursor-pointer text-coral focus:text-coral focus:bg-coral/10"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Cerrar Sesión</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

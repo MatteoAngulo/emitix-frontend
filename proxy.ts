@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 /**
- * Middleware de protección de rutas.
+ * Proxy de protección de rutas (reemplaza middleware.ts en Next.js 16).
  *
  * Rutas públicas: /, /register, /forgot-password
  * Rutas protegidas: todo lo que esté bajo /(dashboard)/
  *
  * El token JWT se almacena en localStorage (solo cliente).
- * El middleware no puede acceder a localStorage directamente,
+ * El proxy no puede acceder a localStorage directamente,
  * por eso usamos una cookie de sesión ligera que el AuthContext
  * sincroniza al hacer login/logout.
  *
@@ -17,7 +17,7 @@ import type { NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = ['/', '/register', '/forgot-password']
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Dejar pasar rutas públicas y assets de Next.js
@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Aplica el middleware a todas las rutas excepto:
+     * Aplica el proxy a todas las rutas excepto:
      * - archivos estáticos (_next/static, _next/image, favicon, etc.)
      * - rutas de API internas de Next.js
      */
